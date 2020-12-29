@@ -2,6 +2,8 @@ import sys
 import os
 from aqt import mw, QAction, QFileDialog
 from pathlib import Path
+from anki.notes import Note as AnkiNote
+import anki.utils
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "dist"))
 
@@ -20,6 +22,8 @@ model_to_fields = {
     #     "description",
     # ],
 }
+
+QKP_ID_FIELD = "qkp_id"
 
 
 class block(str):
@@ -52,7 +56,7 @@ def toYaml(n):
                 # "answer": yml_str(n.fields[1]),
                 # "explanation": yml_str(n.fields[2]),
                 "tags": n.tags,
-                "id": n.id,
+                "id": n.guid,
             }
 
 
@@ -85,43 +89,132 @@ def which_model(saved_note):
         return "Quantized Knowledge QA"
 
 
-def importfn():
-    with open("./user_files/quanta.yaml") as f:
+def import_deck(name):
+    showInfo(str(user_files_path.joinpath(name).joinpath("quanta.yaml")))
+    with open(user_files_path.joinpath(name).joinpath("quanta.yaml")) as f:
         # with open("/home/robert/Documents/QKP/anki-exports/quanta.yaml") as f:
         yml = yaml.safe_load(f)
+        if yml is None:
+            return
         saved_notes = yml["cards"]
         for saved_note in saved_notes:
-            is_new = False
-            try:
-                note = mw.col.getNote(saved_note["id"])
-            except:
-                is_new = True
+            save_note_to_collection(mw.col, 0, saved_note)
 
-            if is_new:
-                note = mw.col.newNote(True)
+            # is_new = False
+            # try:
+            #    note = mw.col.getNote(saved_note["id"])
+            #    showInfo(f"Retrieved note {str(note)}")
+            # except:
+            #    is_new = True
 
-            note.fields = [
-                saved_note[field_name]
-                for field_name in model_to_fields[which_model(saved_note)]
-            ]
-            note.tags = saved_note["tags"]
-            note.id = saved_note["id"]
-            note.flush()
-            if is_new:
-                # showInfo(str(mw.col.decks.active()))
-                mw.col.addNote(note)
+            # if is_new:
+            #    note = mw.col.newNote(True)
+
+            # if is_new:
+            #    # showInfo(str(mw.col.decks.active()))
+            #    mw.col.addNote(note)
+
+            # note.id = saved_note["id"]
+            # note.flush()
+
+
+# {
+#    "__type__": "Note",
+#    "data": "",
+#    "fields": [
+#        "（かをり）ん？ うん？",
+#        "",
+#        "<img src=\"Your_Lie_In_April_01_0.00.13.910.jpg\">",
+#        "[sound:Your_Lie_In_April_01_0.00.13.138-0.00.14.681.mp3]",
+#        "",
+#        "",
+#        "（かをり）ん？うん？"
+#    ],
+#    "flags": 0,
+#    "guid": "eG2]e_:3Ll",
+#    "note_model_uuid": "1a166fe2-1408-11eb-ae12-48e244f5452b",
+#    "tags": [
+#        "Your_Lie_In_April_01"
+#    ]
+# },
+
+
+def save_note_to_collection(collection, deck_id, yml_note):
+    note_model: NoteType = mw.col.models.byName(which_model(yml_note))
+    guid = yml_note["id"]
+    # note_model = deck.metadata.models[self.note_model_uuid]
+    anki_object = get_note_by_guid(mw.col, guid)
+
+    new_note = anki_object is None
+    if new_note:
+        anki_object = AnkiNote(collection, note_model)
+    else:
+        pass
+        # self.handle_model_update(collection, model_map_cache)
+        # Should do this in case the card model has changed.
+
+    # self.handle_import_config_changes(import_config, note_model)
+
+    # self.anki_object.__dict__.update(self.anki_object_dict)
+    anki_object.guid = bytes(str(yml_note["id"]), "utf8")
+    anki_object.fields = [
+        yml_note[field_name] for field_name in model_to_fields[which_model(yml_note)]
+    ]
+    anki_object.tags = yml_note["tags"]
+    anki_object.mid = note_model["id"]
+    anki_object.mod = anki.utils.intTime()
+
+    if new_note:
+        collection.add_note(anki_object, deck_id)
+    else:
+        anki_object.flush()
+        # self.move_cards_to_deck(deck_id)
+        # for card in self.anki_object.cards():
+        #    card.move_to_deck(deck_id, move_from_dynamic_decks=False)
+        #    card.flush()
+
+
+def get_note_by_guid(collection, uuid: str):
+    query = "select id from notes where guid=?"
+    note_id = collection.db.scalar(query, uuid)
+    showInfo(f"Tried to get a note by GUID {uuid}. Received {note_id}.")
+    if not note_id:
+        return None
+
+    return AnkiNote(collection, id=note_id)
+
+
+def importfn():
+    initialize()
+    files = os.listdir(user_files_path)
+    for f in files:
+        # showInfo(f)
+        if not os.path.isdir(user_files_path.joinpath(f)):
+            continue
+        try:
+            import_deck(f)
+        except Exception as e:
+            showInfo(f"{f} failed to import.")
+            raise
+
+
+def initialize():
+    addClozeModel()
+    addQAModel()
+
+
+def add_deck():
+    pass
 
 
 user_files_path = Path(__file__).parent.joinpath("user_files")
 
 
 def exportfn():
+    initialize()
     # showInfo(str(user_files_path))
     cardCount = mw.col.cardCount()
     ids = mw.col.findCards("*")
-
-    addClozeModel()
-    addQAModel()
 
     # 'sortf': 0, 'did': 1609129183995, 'latexPre': '\\documentclass[12pt]{article}\n\\special{papersize=3in,5in}\n\\usepackage[utf8]{inputenc}\n\\usepackage{amssymb,amsmath}\n\\pagestyle{empty}\n\\setlength{\\parindent}{0in}\n\\begin{document}\n', 'latexPost': '\\end{document}', 'mod': 1609135853, 'usn': -1, 'vers': [], 'type': 0, 'css': '.card {\n font-family: arial;\n font-size: 20px;\n text-align: center;\n color: black;\n background-color: white;\n}\n', 'name': 'Basic',
     # 'flds': [{'name': 'Front', 'ord': 0, 'sticky': False, 'rtl': False, 'font': 'Arial', 'size': 20, 'media': []}, {'name': 'Back', 'ord': 1, 'sticky': False, 'rtl': False, 'font': 'Arial', 'size': 20, 'media': []}], 'tmpls': [{'name': 'Card 1', 'ord': 0, 'qfmt': '{{Front}}\n', 'afmt': '\n\n{{FrontSide}}\n\n \n\n{{Back}}', 'did': None, 'bqfmt': '', 'bafmt': ''}], 'tags': ['first-tag', 'second-tag'], 'id': '1609129140801', 'req': [[0, 'all', [0]]], 'crowdanki_uuid': '17158ed6-48c8-11eb-b662-48e244f5452b'}
