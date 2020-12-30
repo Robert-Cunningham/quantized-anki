@@ -4,12 +4,14 @@ from aqt import mw, QAction, QFileDialog
 from pathlib import Path
 from anki.notes import Note as AnkiNote
 import anki.utils
+import pwd
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "dist"))
 
 import yaml2 as yaml
+from dulwich import porcelain
 from aqt.qt import *
-from aqt.utils import showInfo
+from aqt.utils import showInfo, chooseList
 
 model_to_fields = {
     "Quantized Knowledge QA": ["question", "answer", "explanation"],
@@ -44,20 +46,29 @@ def yml_str(s):
         return s
 
 
-def toYaml(n):
+def toYaml(anki_note):
     for (model_name, model_fields) in model_to_fields.items():
-        if n.model()["name"] == model_name:
-            return {
+        if anki_note.model()["name"] == model_name:
+            out = {
                 **{
-                    field_name: yml_str(n.fields[field_index])
+                    field_name: (
+                        yml_str(anki_note.fields[field_index])
+                        if len(anki_note.fields[field_index]) > 0
+                        else None
+                    )
                     for (field_index, field_name) in enumerate(model_fields)
                 },
                 # "question": yml_str(n.fields[0]),
                 # "answer": yml_str(n.fields[1]),
                 # "explanation": yml_str(n.fields[2]),
-                "tags": n.tags,
-                "id": n.guid,
+                "tags": anki_note.tags if len(anki_note.tags) > 0 else None,
+                "id": anki_note.guid,
             }
+            for k in list(out.keys()):
+                if out[k] == None:
+                    del out[k]
+
+            return out
 
 
 def addClozeModel():
@@ -90,15 +101,14 @@ def which_model(saved_note):
 
 
 def import_deck(name):
-    showInfo(str(user_files_path.joinpath(name).joinpath("quanta.yaml")))
-    with open(user_files_path.joinpath(name).joinpath("quanta.yaml")) as f:
-        # with open("/home/robert/Documents/QKP/anki-exports/quanta.yaml") as f:
+    did = mw.col.decks.id(name)
+    with open(user_decks_path.joinpath(name).joinpath("quanta.yaml")) as f:
         yml = yaml.safe_load(f)
         if yml is None:
             return
         saved_notes = yml["cards"]
         for saved_note in saved_notes:
-            save_note_to_collection(mw.col, 0, saved_note)
+            save_note_to_collection(mw.col, did, saved_note)
 
             # is_new = False
             # try:
@@ -158,7 +168,8 @@ def save_note_to_collection(collection, deck_id, yml_note):
     # self.anki_object.__dict__.update(self.anki_object_dict)
     anki_object.guid = bytes(str(yml_note["id"]), "utf8")
     anki_object.fields = [
-        yml_note[field_name] for field_name in model_to_fields[which_model(yml_note)]
+        yml_note.get(field_name, "")
+        for field_name in model_to_fields[which_model(yml_note)]
     ]
     anki_object.tags = yml_note["tags"]
     anki_object.mid = note_model["id"]
@@ -177,7 +188,7 @@ def save_note_to_collection(collection, deck_id, yml_note):
 def get_note_by_guid(collection, uuid: str):
     query = "select id from notes where guid=?"
     note_id = collection.db.scalar(query, uuid)
-    showInfo(f"Tried to get a note by GUID {uuid}. Received {note_id}.")
+    # showInfo(f"Tried to get a note by GUID {uuid}. Received {note_id}.")
     if not note_id:
         return None
 
@@ -186,16 +197,17 @@ def get_note_by_guid(collection, uuid: str):
 
 def importfn():
     initialize()
-    files = os.listdir(user_files_path)
+    files = os.listdir(user_decks_path)
     for f in files:
         # showInfo(f)
-        if not os.path.isdir(user_files_path.joinpath(f)):
+        if not os.path.isdir(user_decks_path.joinpath(f)):
             continue
         try:
             import_deck(f)
         except Exception as e:
             showInfo(f"{f} failed to import.")
             raise
+    mw.deckBrowser.show()
 
 
 def initialize():
@@ -208,11 +220,58 @@ def add_deck():
 
 
 user_files_path = Path(__file__).parent.joinpath("user_files")
+user_decks_path = user_files_path.joinpath("decks")
+user_decks_path.mkdir(exist_ok=True)
+git_decks_path = user_files_path.joinpath("repos")
+git_decks_path.mkdir(exist_ok=True)
+username = pwd.getpwuid(os.getuid()).pw_name
+
+
+def remote_importfn():
+    import_repo("Robert-Cunningham/quantized-decks")
+
+
+repo = None
+repo_name = None
+
+
+def add_deck(deck_name):
+    did = mw.col.decks.id(deck_name)
+    if user_decks_path.joinpath(deck_name).exists():
+        # showInfo("Anki deck already exists.")
+        return
+    os.symlink(
+        git_decks_path.joinpath(repo_name).joinpath(deck_name),
+        user_decks_path.joinpath(deck_name),
+    )
+
+
+def import_repo(_repo_name):
+    # showInfo(username)
+    global repo_name
+    repo_name = _repo_name
+    # askUserDialog(f"Which deck do you want to add from {_repo_name}?")
+    git_decks = [str(x) for x in os.listdir(user_decks_path)]
+    deck_name = git_decks[chooseList("Which deck do you want to import?", git_decks)]
+    add_deck(deck_name)
+    try:
+        git_decks_path.joinpath(repo_name).mkdir(parents=True)
+        repo = porcelain.clone(
+            f"https://github.com/{repo_name}.git",
+            str(git_decks_path.joinpath(repo_name)),
+        )
+    except:
+        showInfo("Git deck already imported")
+    # repos[repo_name] = repo
+    importfn()
+
+
+def update_repos():
+    [porcelain.pull(r) for r in repo.values()]
 
 
 def exportfn():
     initialize()
-    # showInfo(str(user_files_path))
     cardCount = mw.col.cardCount()
     ids = mw.col.findCards("*")
 
@@ -246,7 +305,7 @@ def exportfn():
 
     # with open("/home/robert/Documents/QKP/anki-exports/quanta.yaml", "w") as f:
     deck_names_and_ids = mw.col.decks.all_names_and_ids()
-    showInfo(str(deck_names_and_ids[0]))
+    # showInfo(str(deck_names_and_ids[0]))
 
     for deck_name_and_id in deck_names_and_ids:
         deck_id = deck_name_and_id.id
@@ -258,8 +317,9 @@ def exportfn():
 
 
 def write_deck(name, data):
-    user_files_path.joinpath(name).mkdir(exist_ok=True)
-    with open(user_files_path.joinpath(name).joinpath("quanta.yaml"), "w") as f:
+    deck_path = user_decks_path.joinpath(name)
+    deck_path.mkdir(exist_ok=True)
+    with open(deck_path.joinpath("quanta.yaml"), "w") as f:
         yaml.dump({"cards": data}, f, default_flow_style=False, sort_keys=False)
 
 
@@ -268,7 +328,12 @@ export.setShortcut(QKeySequence("Ctrl+K"))
 export.triggered.connect(exportfn)
 mw.form.menuTools.addAction(export)
 
-imp = QAction("Import quanta", mw)
+imp = QAction("Import local quanta", mw)
 imp.setShortcut(QKeySequence("Ctrl+J"))
 imp.triggered.connect(importfn)
+mw.form.menuTools.addAction(imp)
+
+imp = QAction("Import remote quanta", mw)
+imp.setShortcut(QKeySequence("Ctrl+Shift+R"))
+imp.triggered.connect(remote_importfn)
 mw.form.menuTools.addAction(imp)
