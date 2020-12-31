@@ -13,9 +13,22 @@ from dulwich import porcelain
 from aqt.qt import *
 from aqt.utils import showInfo, chooseList
 
-model_to_fields = {
-    "Quantized Knowledge QA": ["question", "answer", "explanation"],
-    "Quantized Knowledge Cloze": ["cloze", "explanation"],
+models = {
+    "Quantized Knowledge QA": {
+        "template": "Basic",
+        "fields": [
+            "front",
+            "back",
+            "answer_value",
+            "answer_type",
+            "explanation",
+            "source",
+        ],
+    },
+    "Quantized Knowledge Cloze": {
+        "template": "Cloze",
+        "fields": ["cloze", "explanation", "source"],
+    },
     # "Quantized Knowledge Tag": [
     #     "name",
     #     "short name",
@@ -25,7 +38,9 @@ model_to_fields = {
     # ],
 }
 
-QKP_ID_FIELD = "qkp_id"
+for m in models.keys():
+    models[m]["anki_qfmt"] = "{{" + models[m]["fields"][0] + "}}"
+    models[m]["anki_afmt"] = ["{{" + f + "}}<br><br>" for f in models[m]["fields"]]
 
 
 class block(str):
@@ -49,21 +64,22 @@ def yml_str(s):
 def toYaml(anki_note):
     for (model_name, model_fields) in model_to_fields.items():
         if anki_note.model()["name"] == model_name:
-            out = {
-                **{
-                    field_name: (
-                        yml_str(anki_note.fields[field_index])
-                        if len(anki_note.fields[field_index]) > 0
-                        else None
-                    )
-                    for (field_index, field_name) in enumerate(model_fields)
-                },
-                # "question": yml_str(n.fields[0]),
-                # "answer": yml_str(n.fields[1]),
-                # "explanation": yml_str(n.fields[2]),
-                "tags": anki_note.tags if len(anki_note.tags) > 0 else None,
-                "id": anki_note.guid,
-            }
+            out = {"id": anki_note.guid}
+
+            if len(anki_note.tags) > 0:
+                out["tags"] = anki_note.tags
+
+            for (field_index, field_name) in enumerate(model_fields):
+                if not anki_note.fields[field_index]:
+                    continue
+
+                if not "_" in field_name:
+                    out[field_name] = yml_str(anki_note.fields[field_index])
+                else:
+                    items = field_name.split("_")
+                    out.setdefault(items[0], {})
+                    out[items[0]][items[1]] = anki_note.fields[field_index]
+
             for k in list(out.keys()):
                 if out[k] == None:
                     del out[k]
@@ -71,26 +87,33 @@ def toYaml(anki_note):
             return out
 
 
-def addClozeModel():
-    model_name = "Quantized Knowledge Cloze"
-    if model_name not in mw.col.models.allNames():
-        quanta_model = mw.col.models.copy(mw.col.models.byName("Cloze"))
-        info_field = quanta_model["flds"].pop(1)
-        quanta_model["flds"].append({**info_field, "name": "Explanation", "ord": 1})
-        quanta_model["name"] = model_name
-        mw.col.models.save(quanta_model)
+basic_field = {
+    "name": "Text",
+    "ord": 0,
+    "sticky": False,
+    "rtl": False,
+    "font": "Arial",
+    "size": 20,
+}
 
 
-def addQAModel():
-    model_name = "Quantized Knowledge QA"
+def addModel(model_name):
+    model = models[model_name]
     if model_name not in mw.col.models.allNames():
-        quanta_model = mw.col.models.copy(mw.col.models.byName("Basic"))
-        showInfo(str(quanta_model))
-        quanta_model["flds"].append(
-            {**quanta_model["flds"][0], "name": "Explanation", "ord": 2}
-        )
+        quanta_model = mw.col.models.copy(mw.col.models.byName(model["template"]))
+        quanta_model["flds"] = []
         quanta_model["name"] = model_name
-        mw.col.models.save(quanta_model)
+    else:
+        quanta_model = mw.col.models.byName(model_name)
+
+    quanta_model["flds"] = []
+    for index, field in enumerate(model["fields"]):
+        quanta_model["flds"].append({**basic_field, "name": field, "ord": index})
+
+    quanta_model["tmpls"][0]["qfmt"] = model["anki_qfmt"]
+    quanta_model["tmpls"][0]["afmt"] = model["anki_afmt"]
+
+    mw.col.models.save(quanta_model)
 
 
 def which_model(saved_note):
@@ -149,11 +172,23 @@ def import_deck(name):
 # },
 
 
+def deepget(nested_dict, key):
+    keys = key.split("_")
+    for k in keys:
+        if isinstance(nested_dict, dict):
+            nested_dict = nested_dict.get(k)
+        else:
+            return None
+
+    return nested_dict
+
+
 def save_note_to_collection(collection, deck_id, yml_note):
     note_model: NoteType = mw.col.models.byName(which_model(yml_note))
     guid = yml_note["id"]
     # note_model = deck.metadata.models[self.note_model_uuid]
     anki_object = get_note_by_guid(mw.col, guid)
+    # if yml_note.get('answer', {}).get('type', "") == "@general/text/precise"
 
     new_note = anki_object is None
     if new_note:
@@ -168,10 +203,14 @@ def save_note_to_collection(collection, deck_id, yml_note):
     # self.anki_object.__dict__.update(self.anki_object_dict)
     anki_object.guid = bytes(str(yml_note["id"]), "utf8")
     anki_object.fields = [
-        yml_note.get(field_name, "")
+        (
+            deepget(yml_note, field_name)
+            if deepget(yml_note, field_name) is not None
+            else ""
+        )
         for field_name in model_to_fields[which_model(yml_note)]
     ]
-    anki_object.tags = yml_note["tags"]
+    anki_object.tags = yml_note.get("tags")
     anki_object.mid = note_model["id"]
     anki_object.mod = anki.utils.intTime()
 
@@ -195,6 +234,17 @@ def get_note_by_guid(collection, uuid: str):
     return AnkiNote(collection, id=note_id)
 
 
+# def import_media(col, deck_folder):
+#     media_directory = directory_path.joinpath("media")
+#     if not media_directory.exists():
+#         return
+#     src_files = os.listdir(media_directory)
+#     for filename in src_files:
+#         full_filename = os.path.join(media_directory, filename)
+#         if os.path.isfile(full_filename):
+#             shutil.copy(full_filename, col.media.dir())
+
+
 def importfn():
     initialize()
     files = os.listdir(user_decks_path)
@@ -211,8 +261,7 @@ def importfn():
 
 
 def initialize():
-    addClozeModel()
-    addQAModel()
+    [addModel(k) for k in models.keys()]
 
 
 def add_deck():
@@ -251,7 +300,7 @@ def import_repo(_repo_name):
     global repo_name
     repo_name = _repo_name
     # askUserDialog(f"Which deck do you want to add from {_repo_name}?")
-    git_decks = [str(x) for x in os.listdir(user_decks_path)]
+    git_decks = [str(x) for x in os.listdir(git_decks_path.joinpath(repo_name))]
     deck_name = git_decks[chooseList("Which deck do you want to import?", git_decks)]
     add_deck(deck_name)
     try:
@@ -337,3 +386,8 @@ imp = QAction("Import remote quanta", mw)
 imp.setShortcut(QKeySequence("Ctrl+Shift+R"))
 imp.triggered.connect(remote_importfn)
 mw.form.menuTools.addAction(imp)
+
+init = QAction("Initialize QKP", mw)
+# imp.setShortcut(QKeySequence("Ctrl+Shift+R"))
+imp.triggered.connect(initialize)
+mw.form.menuTools.addAction(init)
