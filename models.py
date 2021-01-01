@@ -1,16 +1,10 @@
 from aqt import mw
+from aqt.utils import showInfo
 
 models = {
     "Quantized Knowledge QA": {
         "template": "Basic",
-        "fields": [
-            "front",
-            "back",
-            "answer_value",
-            "answer_type",
-            "explanation",
-            "source",
-        ],
+        "fields": ["front", "back", "answer_value", "explanation", "source",],
     },
     "Quantized Knowledge Cloze": {
         "template": "Cloze",
@@ -27,7 +21,9 @@ models = {
 
 for m in models.keys():
     models[m]["anki_qfmt"] = "{{" + models[m]["fields"][0] + "}}"
-    models[m]["anki_afmt"] = ["{{" + f + "}}<br><br>" for f in models[m]["fields"]]
+    models[m]["anki_afmt"] = "".join(
+        ["{{" + f + "}}<br><br>" for f in models[m]["fields"]]
+    )
 
 
 def initialize_models():

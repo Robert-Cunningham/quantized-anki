@@ -1,5 +1,8 @@
-from aqt import mw, QAction, QFileDialog
+from aqt import mw, QAction, QKeySequence
 import yaml2 as yaml
+from .models import models
+from .consts import *
+from .utils import *
 
 
 class block(str):
@@ -21,7 +24,8 @@ def yml_str(s):
 
 
 def note_to_yaml(anki_note):
-    for (model_name, model_fields) in model_to_fields.items():
+    for (model_name, model_data) in models.items():
+        model_fields = model_data["fields"]
         if anki_note.model()["name"] == model_name:
             out = {"id": anki_note.guid}
 
@@ -47,7 +51,6 @@ def note_to_yaml(anki_note):
 
 
 def export_all():
-    initialize()
     nids = mw.col.findNotes(
         'note:"Quantized Knowledge QA" or note:"Quantized Knowledge Cloze"'
     )
@@ -66,11 +69,24 @@ def export_all():
 def write_deck_to_disk(name, quanta):
     deck_path = user_decks_path.joinpath(name)
     deck_path.mkdir(exist_ok=True)
+    try:
+        with open(deck_path.joinpath("quanta.yaml")) as f:
+            pre_existing = yaml.safe_load(f)["cards"]
+        pre_existing_by_id = {p["id"]: p for p in pre_existing}
+
+    except Exception as e:
+        pre_existing_by_id = {}
+
+    for (i, q) in enumerate(quanta["cards"]):
+        prex_card = pre_existing_by_id.get(q["id"], {})
+        update(prex_card, q)
+        quanta["cards"][i] = prex_card
+
     with open(deck_path.joinpath("quanta.yaml"), "w") as f:
-        yaml.dump(quanta, f, default_flow_style=False, sort_keys=False)
+        yaml.safe_dump(quanta, f, default_flow_style=False, sort_keys=False)
 
 
 export_all_action = QAction("Export quanta", mw)
-export_all_action.setShortcut(QKeySequence("Ctrl+E"))
+export_all_action.setShortcut(QKeySequence("Ctrl+Shift+E"))
 export_all_action.triggered.connect(export_all)
 mw.form.menuTools.addAction(export_all_action)

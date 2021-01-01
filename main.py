@@ -1,10 +1,8 @@
 import sys
 import os
-from aqt import mw, QAction, QFileDialog
+from aqt import mw, QAction, QFileDialog, QKeySequence
 from pathlib import Path
-from anki.notes import Note as AnkiNote
 import anki.utils
-import pwd
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "dist"))
 
@@ -12,22 +10,17 @@ import yaml2 as yaml
 from dulwich import porcelain
 from aqt.qt import *
 from aqt.utils import showInfo, chooseList
+from anki.hooks import addHook
+from aqt import gui_hooks
 
-from models import *
-from exporter import *
-from importer import *
+from .models import *
+from .exporter import *
+from .importer import *
+from .consts import *
 
 
-def initialize():
+def initialize(_):
     initialize_models()
-
-
-user_files_path = Path(__file__).parent.joinpath("user_files")
-user_decks_path = user_files_path.joinpath("decks")
-user_decks_path.mkdir(exist_ok=True)
-git_decks_path = user_files_path.joinpath("repos")
-git_decks_path.mkdir(exist_ok=True)
-username = pwd.getpwuid(os.getuid()).pw_name
 
 
 def remote_importfn():
@@ -81,3 +74,5 @@ mw.form.menuTools.addAction(imp)
 init = QAction("Initialize QKP", mw)
 init.triggered.connect(initialize)
 mw.form.menuTools.addAction(init)
+
+gui_hooks.collection_did_load.append(initialize)

@@ -1,6 +1,11 @@
-from aqt import mw, QAction
+from aqt import mw, QAction, QFileDialog, QKeySequence
 import os
 from aqt.utils import showInfo
+import yaml2 as yaml
+from anki.notes import Note as AnkiNote
+import anki.utils
+from .models import *
+from .consts import *
 
 
 def import_deck(name):
@@ -69,8 +74,9 @@ def save_note_to_collection(collection, deck_id, yml_note):
             if deepget(yml_note, field_name) is not None
             else ""
         )
-        for field_name in model_to_fields[which_model(yml_note)]
+        for field_name in models[which_model(yml_note)]["fields"]
     ]
+    # showInfo(str(anki_object.fields))
     anki_object.tags = yml_note.get("tags")
     anki_object.mid = note_model["id"]
     anki_object.mod = anki.utils.intTime()
@@ -106,7 +112,6 @@ def get_note_by_guid(collection, uuid: str):
 
 
 def import_all():
-    initialize()
     files = os.listdir(user_decks_path)
     for f in files:
         # showInfo(f)
