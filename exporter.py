@@ -63,7 +63,7 @@ def export_all():
         deck_notes = [n for n in notes if deck_id in [c.did for c in n.cards()]]
         data = [note_to_yaml(n) for n in deck_notes]
         if len(data) > 0:
-            write_deck_to_disk(deck_name, {"cards": data})
+            write_deck_to_disk(deck_name, {"meta": {"name": deck_name}, "cards": data})
 
 
 def write_deck_to_disk(name, quanta):

@@ -1,6 +1,9 @@
 from aqt import mw
 from aqt.utils import showInfo
 
+
+add_to_all_sides = """ """
+
 models = {
     "Quantized Knowledge QA": {
         "template": "Basic",
@@ -20,9 +23,10 @@ models = {
 }
 
 for m in models.keys():
-    models[m]["anki_qfmt"] = "{{" + models[m]["fields"][0] + "}}"
-    models[m]["anki_afmt"] = "".join(
-        ["{{" + f + "}}<br><br>" for f in models[m]["fields"]]
+    models[m]["anki_qfmt"] = "{{" + models[m]["fields"][0] + "}}" + add_to_all_sides
+    models[m]["anki_afmt"] = (
+        "".join(["{{" + f + "}}<br><br>" for f in models[m]["fields"]])
+        + add_to_all_sides
     )
 
 

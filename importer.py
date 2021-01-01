@@ -8,12 +8,13 @@ from .models import *
 from .consts import *
 
 
-def import_deck(name):
-    did = mw.col.decks.id(name)
-    with open(user_decks_path.joinpath(name).joinpath("quanta.yaml")) as f:
+def import_deck(quanta_path):
+    with open(quanta_path) as f:
         yml = yaml.safe_load(f)
         if yml is None:
             return
+
+        did = mw.col.decks.id(yml.get("meta", {}).get("name", "Untitled Deck"))
         saved_notes = yml["cards"]
         for saved_note in saved_notes:
             save_note_to_collection(mw.col, did, saved_note)
@@ -118,7 +119,7 @@ def import_all():
         if not os.path.isdir(user_decks_path.joinpath(f)):
             continue
         try:
-            import_deck(f)
+            import_deck(user_decks_path.joinpath(f).joinpath("quanta.yaml"))
         except Exception as e:
             showInfo(f"{f} failed to import.")
             raise
