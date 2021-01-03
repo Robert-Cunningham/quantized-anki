@@ -113,6 +113,7 @@ def get_note_by_guid(collection, uuid: str):
 
 
 def import_all():
+    mw.backup()
     files = os.listdir(user_decks_path)
     for f in files:
         # showInfo(f)
@@ -126,7 +127,7 @@ def import_all():
     mw.deckBrowser.show()
 
 
-import_all_action = QAction("Import local quanta", mw)
+import_all_action = QAction("Import from quanta.yamls", mw)
 import_all_action.setShortcut(QKeySequence("Ctrl+I"))
 import_all_action.triggered.connect(import_all)
 mw.form.menuTools.addAction(import_all_action)

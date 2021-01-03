@@ -90,7 +90,7 @@ def import_from_folder():
     import_all()
 
 
-imp = QAction("Import remote quanta", mw)
+imp = QAction("Import directly from GitHub", mw)
 imp.setShortcut(QKeySequence("Ctrl+Shift+R"))
 imp.triggered.connect(import_remote)
 mw.form.menuTools.addAction(imp)
@@ -100,12 +100,8 @@ mw.form.menuTools.addAction(imp)
 # send_changes.triggered.connect(update_repos)
 # mw.form.menuTools.addAction(send_changes)
 
-import_from_folder_action = QAction("Import from folder", mw)
+import_from_folder_action = QAction("Add local folder with quanta.yaml", mw)
 import_from_folder_action.triggered.connect(import_from_folder)
 mw.form.menuTools.addAction(import_from_folder_action)
-
-init = QAction("Initialize QKP", mw)
-init.triggered.connect(initialize)
-mw.form.menuTools.addAction(init)
 
 gui_hooks.collection_did_load.append(initialize)

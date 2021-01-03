@@ -86,7 +86,7 @@ def write_deck_to_disk(name, quanta):
         yaml.safe_dump(quanta, f, default_flow_style=False, sort_keys=False)
 
 
-export_all_action = QAction("Export quanta", mw)
+export_all_action = QAction("Export to quanta.yamls", mw)
 export_all_action.setShortcut(QKeySequence("Ctrl+Shift+E"))
 export_all_action.triggered.connect(export_all)
 mw.form.menuTools.addAction(export_all_action)
