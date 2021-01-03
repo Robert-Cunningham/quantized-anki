@@ -9,8 +9,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "dist"))
 
 import yaml2 as yaml
 from dulwich import porcelain
+import glob
 from aqt.qt import *
-from aqt.utils import showInfo, chooseList, getText
+from aqt.utils import showInfo, chooseList, getText, getFile
 from anki.hooks import addHook
 from aqt import gui_hooks
 
@@ -24,7 +25,12 @@ def initialize(_):
     initialize_models()
 
 
-def add_deck(disk_location, deck_name):
+def add_deck(disk_location):
+    with open(Path(disk_location).joinpath("quanta.yaml")) as y:
+        name = yaml.safe_load(y).get("meta", {}).get("name")
+
+    deck_name = name if name is not None else str(disk_location).split("/")[-1]
+
     did = mw.col.decks.id(deck_name)
     if user_decks_path.joinpath(deck_name).exists():
         showInfo("An anki deck with that name already exists.")
@@ -55,32 +61,48 @@ def import_remote():
         # update_repos()
         pass
 
-    with open(
-        git_decks_path.joinpath(github_user)
-        .joinpath(github_repo)
-        .joinpath(github_path)
-        .joinpath("quanta.yaml")
-    ) as y:
-        name = yaml.safe_load(y).get("meta", {}).get("name")
-
     add_deck(
-        git_decks_path.joinpath(github_user)
-        .joinpath(github_repo)
-        .joinpath(github_path),
-        name if name is not None else f"{github_user}/{github_repo}/{github_path}",
+        git_decks_path.joinpath(github_user).joinpath(github_repo).joinpath(github_path)
     )
 
     import_all()
 
 
-def update_repos():
-    [porcelain.pull(r) for r in repo.values()]
+repo_list = glob.glob(str(git_decks_path) + "/*/*")
+
+
+# def update_repos():
+#     # export_all()
+#     for r in repo_list:
+#         showInfo(str(r))
+#         porcelain.add(r, glob.glob(str(r) + "/**/*"))
+#         porcelain.commit(r, "Update quanta")
+#     # [porcelain.pull(r) for r in repo.values()]
+
+
+def import_from_folder():
+    # out = getFile(0, "Choose quanta.yaml", None, dir=True)
+    folder = QFileDialog.getExistingDirectory(
+        caption="Pick the folder which contains your quanta.yaml."
+    )
+    showInfo(str(folder))
+    add_deck(folder)
+    import_all()
 
 
 imp = QAction("Import remote quanta", mw)
 imp.setShortcut(QKeySequence("Ctrl+Shift+R"))
 imp.triggered.connect(import_remote)
 mw.form.menuTools.addAction(imp)
+
+# send_changes = QAction("Send changes to GitHub", mw)
+# # imp.setShortcut(QKeySequence("Ctrl+Shift+R"))
+# send_changes.triggered.connect(update_repos)
+# mw.form.menuTools.addAction(send_changes)
+
+import_from_folder_action = QAction("Import from folder", mw)
+import_from_folder_action.triggered.connect(import_from_folder)
+mw.form.menuTools.addAction(import_from_folder_action)
 
 init = QAction("Initialize QKP", mw)
 init.triggered.connect(initialize)
