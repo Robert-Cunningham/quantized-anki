@@ -22,10 +22,18 @@ models = {
     # ],
 }
 
+
+def format_field(field_name):
+    if field_name == "cloze":
+        return "{{cloze:" + field_name + "}}"
+    else:
+        return "{{" + field_name + "}}"
+
+
 for m in models.keys():
-    models[m]["anki_qfmt"] = "{{" + models[m]["fields"][0] + "}}" + add_to_all_sides
+    models[m]["anki_qfmt"] = format_field(models[m]["fields"][0]) + add_to_all_sides
     models[m]["anki_afmt"] = (
-        "".join(["{{" + f + "}}<br><br>" for f in models[m]["fields"]])
+        "".join([format_field(f) + "<br><br>" for f in models[m]["fields"]])
         + add_to_all_sides
     )
 
