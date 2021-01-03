@@ -45,6 +45,7 @@ basic_field = {
 
 
 def addModel(model_name):
+    mw.backup()
     model = models[model_name]
     if model_name not in mw.col.models.allNames():
         quanta_model = mw.col.models.copy(mw.col.models.byName(model["template"]))
