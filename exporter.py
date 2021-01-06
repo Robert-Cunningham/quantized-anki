@@ -83,7 +83,7 @@ def write_deck_to_disk(name, quanta):
         quanta["cards"][i] = prex_card
 
     with open(deck_path.joinpath("quanta.yaml"), "w") as f:
-        yaml.safe_dump(quanta, f, default_flow_style=False, sort_keys=False)
+        yaml.dump(quanta, f, default_flow_style=False, sort_keys=False)
 
 
 export_all_action = QAction("Export to quanta.yamls", mw)
