@@ -1,6 +1,7 @@
 from aqt import mw, QAction, QFileDialog, QKeySequence
 import os
 from aqt.utils import showInfo
+import shutil
 import yaml2 as yaml
 from anki.notes import Note as AnkiNote
 import anki.utils
@@ -18,6 +19,7 @@ def import_deck(quanta_path):
         saved_notes = yml["cards"]
         for saved_note in saved_notes:
             save_note_to_collection(mw.col, did, saved_note)
+    import_media(quanta_path)
 
 
 # {
@@ -101,15 +103,17 @@ def get_note_by_guid(collection, uuid: str):
     return AnkiNote(collection, id=note_id)
 
 
-# def import_media(col, deck_folder):
-#     media_directory = directory_path.joinpath("media")
-#     if not media_directory.exists():
-#         return
-#     src_files = os.listdir(media_directory)
-#     for filename in src_files:
-#         full_filename = os.path.join(media_directory, filename)
-#         if os.path.isfile(full_filename):
-#             shutil.copy(full_filename, col.media.dir())
+def import_media(quanta_path: Path):
+    media_folder = quanta_path.parent.joinpath("media")
+    if not media_folder.exists() or not media_folder.is_dir():
+        return
+
+    media_files = os.listdir(media_folder)
+
+    for f in media_files:
+        full_name = media_folder.joinpath(f)
+        if os.path.isfile(full_name):
+            shutil.copy(full_name, mw.col.media.dir())
 
 
 def import_all():
