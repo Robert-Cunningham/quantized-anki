@@ -20,6 +20,7 @@ def import_deck(quanta_path):
         for saved_note in saved_notes:
             save_note_to_collection(mw.col, did, saved_note)
     import_media(quanta_path)
+    mw.deckBrowser.show()
 
 
 # {
@@ -105,15 +106,19 @@ def get_note_by_guid(collection, uuid: str):
 
 def import_media(quanta_path: Path):
     media_folder = quanta_path.parent.joinpath("media")
+    anki_media_collection = Path(mw.col.media.dir())
     if not media_folder.exists() or not media_folder.is_dir():
         return
 
     media_files = os.listdir(media_folder)
 
-    for f in media_files:
-        full_name = media_folder.joinpath(f)
-        if os.path.isfile(full_name):
-            shutil.copy(full_name, mw.col.media.dir())
+    for file_name in media_files:
+        full_name = media_folder.joinpath(file_name)
+        if (
+            os.path.isfile(full_name)
+            and not Path(anki_media_collection.joinpath(file_name)).exists()
+        ):
+            shutil.copy(full_name, anki_media_collection)
 
 
 def import_all():

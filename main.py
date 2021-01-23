@@ -81,13 +81,12 @@ repo_list = glob.glob(str(git_decks_path) + "/*/*")
 
 
 def import_from_folder():
-    # out = getFile(0, "Choose quanta.yaml", None, dir=True)
     folder = QFileDialog.getExistingDirectory(
         caption="Pick the folder which contains your quanta.yaml."
     )
-    showInfo(str(folder))
     add_deck(folder)
-    import_all()
+    # import_all()
+    import_deck(Path(folder).joinpath("quanta.yaml"))
 
 
 imp = QAction("Import directly from GitHub", mw)

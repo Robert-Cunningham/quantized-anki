@@ -51,14 +51,19 @@ def note_to_yaml(anki_note):
 
 
 def export_all():
+    must_be_active = True
+    active_decks = mw.col.decks.active()
+
     nids = mw.col.findNotes(
-        'note:"Quantized Knowledge QA" or note:"Quantized Knowledge Cloze"'
+        'deck:current or (note:"Quantized Knowledge QA" or note:"Quantized Knowledge Cloze")'
     )
     notes = [mw.col.getNote(nid) for nid in nids]
     deck_names_and_ids = mw.col.decks.all_names_and_ids()
 
     for deck_name_and_id in deck_names_and_ids:
         deck_id = deck_name_and_id.id
+        if not deck_id in active_decks:
+            continue
         deck_name = deck_name_and_id.name
         deck_notes = [n for n in notes if deck_id in [c.did for c in n.cards()]]
         data = [note_to_yaml(n) for n in deck_notes]
